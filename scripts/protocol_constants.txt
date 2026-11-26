@@ -1,0 +1,3 @@
+# Short byte sequences compare_captures.py may find in this repository: constants every ring of this kind uses.
+336666000000  # public-ok: raw PPG start, setting 6 (ppg_start_packet)
+7929070e00    # public-ok: request for debug page 14

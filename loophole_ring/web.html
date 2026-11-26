@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loophole · live ring</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f6f4; --card:#fff; --ink:#1b1b1b; --mute:#6b6b6b; --line:#e3e3df;
+          --acc:#3b5bdb; --tx:#b35c00; --rx:#2b7a3d; --bad:#c92a2a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --card:#1e1e1e; --ink:#ececec; --mute:#9a9a9a;
+          --line:#2e2e2e; --acc:#7c96ff; --tx:#f0a050; --rx:#6cc583; --bad:#ff6b6b; } }
+  * { box-sizing:border-box } body { margin:0; font:14px/1.45 -apple-system, system-ui, sans-serif; background:var(--bg); color:var(--ink) }
+  header { display:flex; gap:12px; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line) }
+  header h1 { font-size:16px; margin:0 } #status { color:var(--mute) } .dot { width:9px; height:9px; border-radius:50%; background:var(--bad) }
+  .dot.on { background:var(--rx) }
+  main { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:14px; padding:16px 20px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px }
+  .card h2 { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--mute); margin:0 0 8px }
+  .big { font-size:34px; font-weight:600; font-variant-numeric:tabular-nums } .sub { color:var(--mute); font-size:12px }
+  .wide { grid-column: 1 / -1 }
+  button { font:inherit; padding:6px 11px; border-radius:7px; border:1px solid var(--line); background:var(--bg); color:var(--ink); cursor:pointer; margin:2px 4px 2px 0 }
+  button.primary { background:var(--acc); color:#fff; border-color:var(--acc) } button:disabled { opacity:.45; cursor:default }
+  canvas { width:100%; height:150px; display:block }
+  pre { margin:0; font:12px/1.4 ui-monospace, Menlo, monospace; white-space:pre-wrap; max-height:340px; overflow:auto }
+  .tx { color:var(--tx) } .rx { color:var(--rx) } .m { color:var(--mute) }
+  label { color:var(--mute); font-size:12px; margin-left:8px }
+  .ring { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin:6px 0 }
+  .ring.chosen { border-color:var(--acc) } .ring .nm { font-weight:600; font-variant-numeric:tabular-nums } .ring .grow { flex:1 }
+</style>
+</head>
+<body>
+<header><div id="dot" class="dot"></div><h1>Loophole · live ring</h1><span id="status">connecting…</span></header>
+<main>
+  <section class="card wide"><h2>Rings nearby <button id="rescan" style="margin-left:8px">Scan</button><button id="release" title="disconnect so the phone app can connect; the choice is kept">Release to phone</button><span class="sub" id="scanning"></span></h2>
+    <div id="rings" class="sub">scanning…</div>
+    <div class="sub">Only the chosen ring is connected. Rings are numbered because a ring's name holds its Bluetooth address. Your choice is saved on this computer. A ring connected to a phone may not show here.</div></section>
+  <section class="card"><h2>Battery</h2><div class="big" id="bat">–</div>
+    <div class="sub" id="batsub">waiting for the ring</div></section>
+  <section class="card"><h2>Live HR (computed by the ring)</h2><div class="big" id="live">–</div>
+    <div class="sub" id="livesub">opcode 0x52 · needs the ring on a finger</div>
+    <div style="margin-top:8px"><button class="primary" id="livestart">Start</button><button id="livestop">Stop</button></div></section>
+  <section class="card"><h2>Breathing mode (0x72)</h2><div class="big" id="breath">–</div>
+    <div class="sub" id="breathsub">needs the ring on a finger · uses the sensors, auto-stops after 120 s</div>
+    <div style="margin-top:8px"><button class="primary" data-a="breath-start">Start</button><button data-a="breath-stop">Stop</button></div></section>
+  <section class="card"><h2>Heart rate (from raw PPG)</h2><div class="big" id="hr">–</div>
+    <div class="sub" id="hrsub">needs the ring on a finger, keep still · 10 s windows</div>
+    <div style="margin-top:8px"><button class="primary" id="hrstart">Start (LEDs on)</button><button id="hrstop">Stop</button><button data-a="rec-stop" title="send 0x91 even if no session is known">Force LEDs off</button></div></section>
+  <section class="card"><h2>Ring</h2>
+    <button data-a="time">Clock</button><button data-a="history">Recent history</button><br>
+    <span class="sub">Battery mode:</span> <button data-a="turbo" title="d4 + fc">Turbo</button><button data-a="chill" title="d4 + fb">Chill</button><button data-a="critical" title="d3">Critical</button><br>
+    <span class="sub">Chill on its own:</span> <button data-a="passive-on">On (FB)</button><button data-a="passive-off">Off (FC)</button><br>
+    <span class="sub">SpO2 sensing:</span> <button data-a="spo2-on" title="sends D1">On (D1)</button><button data-a="spo2-off" title="sends D2">Off (D2)</button>
+    <div class="sub">Check the result with the 0x20 query below.</div>
+    <pre id="result" class="m" style="margin-top:8px">–</pre></section>
+  <section class="card wide"><h2>Diagnostics (read-only queries)</h2>
+    <div id="probes"></div><pre id="probeout" class="m" style="margin-top:8px">pick a query</pre></section>
+  <section class="card wide"><h2>PPG channel 0 (25 Hz)</h2><canvas id="wave" width="1200" height="150"></canvas></section>
+  <section class="card wide"><h2>Traffic (your own readings: think before sharing) <label><input type="checkbox" id="showstream"> show stream frames</label>
+    <label><input type="checkbox" id="pause"> pause</label></h2><pre id="log"></pre></section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const post = a => fetch('/action/' + a, {method: 'POST'});
+document.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => post(b.dataset.a));
+$('hrstart').onclick = () => confirm('Turn the ring LEDs on and stream PPG? Uses battery; auto-stops after 120 s.') && post('hr-start');
+$('hrstop').onclick = () => post('hr-stop');
+$('livestart').onclick = () => post('live-start'); $('livestop').onclick = () => post('live-stop');
+
+[['flags','0x20 status flags'],['mode','0x59 sensor mode'],['interval','0x14 record interval'],
+ ['page-0','0x79 summary'],['page-4','0x79 power'],['page-13','0x79 link'],['page-14','0x79 recent commands'],
+ ['page-15','0x79 sensor addresses'],['page-28','0x79 bonds'],['page-29','0x79 page 29'],['page-30','0x79 versions'],
+ ['range','0x09 record range'],['wear','0x9A wear log'],['wear-off','0x9A off finger'],['wear-on','0x9A on finger'],
+ ['faults','0xA1 fault log'],['events-info','0x0F event counts'],['events','0x0F event log'],['cfg-2','0x80 modes'],['cfg-3','0x80 motion'],['cfg-4','0x80 optical'],['cfg-5','0x80 page 5'],['cfg-6','0x80 page 6']].forEach(([k, label]) => {
+  const b = document.createElement('button'); b.textContent = label; b.onclick = () => post('q-' + k); $('probes').appendChild(b); });
+$('rescan').onclick = () => fetch('/scan', {method: 'POST'});
+let released = false;
+$('release').onclick = () => fetch(released ? '/reconnect' : '/release', {method: 'POST'});
+const bars = rssi => rssi == null ? '' : rssi > -60 ? '▂▄▆█' : rssi > -72 ? '▂▄▆' : rssi > -84 ? '▂▄' : '▂';
+function rings(list) {
+  const el = $('rings'); el.innerHTML = '';
+  if (!list.length) { el.textContent = 'no rings seen yet: wake the ring (tap it or put it on the charger) and press Scan'; return; }
+  for (const r of list) {
+    const row = document.createElement('div'); row.className = 'ring' + (r.chosen ? ' chosen' : '');
+    const state = r.connected ? 'connected' : r.chosen ? 'chosen · connecting' : r.seen ? `seen ${hhmmss(r.seen)}` : '';
+    row.innerHTML = `<span class="nm"></span><span class="sub">${bars(r.rssi)} ${r.rssi ?? ''}${r.rssi != null ? ' dBm' : ''}</span>
+                     <span class="sub grow">${state}</span>`;
+    row.querySelector('.nm').textContent = `Ring ${r.ring}`;
+    const b = document.createElement('button');
+    if (r.chosen) { b.textContent = 'Forget'; b.onclick = () => fetch('/choose/-', {method: 'POST'}); }
+    else { b.textContent = 'Use this ring'; b.className = 'primary';
+           b.onclick = () => confirm(`Switch to ring ${r.ring}? A running LED or live HR session is stopped first.`) &&
+                             fetch('/choose/' + r.ring, {method: 'POST'}); }
+    row.appendChild(b); el.appendChild(row);
+  }
+}
+const wave = []; const W = 25 * 10;  // 10 s on screen
+function draw() {
+  const c = $('wave'), g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+  if (wave.length < 2) return;
+  const lo = Math.min(...wave), hi = Math.max(...wave), span = hi - lo || 1;
+  g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--acc'); g.lineWidth = 2; g.beginPath();
+  wave.forEach((v, i) => { const x = i / (W - 1) * c.width, y = c.height - 8 - (v - lo) / span * (c.height - 16);
+                           i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.stroke();
+}
+const lines = [];
+function log(cls, text) {
+  if ($('pause').checked) return;
+  const line = document.createElement('span'); line.className = cls; line.textContent = text + '\n';
+  lines.push(line); if (lines.length > 300) lines.shift();
+  const el = $('log'); const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+  el.replaceChildren(...lines); if (atBottom) el.scrollTop = el.scrollHeight;
+}
+const hhmmss = t => new Date(t * 1000).toLocaleTimeString([], {hour12: false});
+const es = new EventSource('/events');
+es.onmessage = ev => {
+  const m = JSON.parse(ev.data);
+  if (m.type === 'status') { $('status').textContent = m.text; $('dot').classList.toggle('on', m.connected); }
+  else if (m.type === 'state') {
+    $('bat').textContent = m.battery + '%';
+    $('batsub').textContent = `${m.charging ? 'charging' : 'not charging'} · ${m.microamps == null ? '–' : (m.microamps/1000).toFixed(2)} mA · ${m.mv} mV · ${m.temp} °C · ${m.capacity} mAh cell · updated ${hhmmss(Date.now()/1000)}`;
+  } else if (m.type === 'hr') {
+    $('hr').textContent = m.bpm ? Math.round(m.bpm) + ' BPM' : '— ';
+    $('hrsub').textContent = m.bpm ? `DFT ${m.dft} / ACF ${m.acf} agree · quality ${m.q}` : `no reliable reading (DFT ${m.dft} vs ACF ${m.acf}, quality ${m.q}) · keep still`;
+  } else if (m.type === 'live') {
+    $('live').textContent = m.hr ? m.hr + ' BPM' : '— ';
+    $('livesub').textContent = `quality ${m.q} · HRV ${m.hrv} ms · byte 7 ${m.b7} · steps ${m.steps} · ${m.temp ?? '–'} °C · ring ${hhmmss(m.ring_time)}`;
+  } else if (m.type === 'breath') {
+    $('breath').textContent = m.hr ? m.hr + ' BPM' : '— ';
+    $('breathsub').textContent = `quality ${m.q} · HRV ${m.hrv} ms (SDNN ${m.sdnn}) · ${m.temp ?? '–'} °C · ring ${hhmmss(m.ring_time)}`;
+  } else if (m.type === 'probe') {
+    $('probeout').textContent = `${m.name}  ${JSON.stringify(m.decoded, null, 1)}\nraw ${m.hex}`;
+  } else if (m.type === 'ppg') { wave.push(...m.values); while (wave.length > W) wave.shift(); draw(); }
+  else if (m.type === 'rings') rings(m.rings);
+  else if (m.type === 'released') { released = m.on; $('release').textContent = m.on ? 'Reconnect' : 'Release to phone'; }
+  else if (m.type === 'scanning') $('scanning').textContent = m.on ? ' scanning…' : '';
+  else if (m.type === 'state_reset') { $('bat').textContent = '–'; $('batsub').textContent = 'waiting for the ring';
+    $('live').textContent = '–'; $('hr').textContent = '–'; wave.length = 0; draw(); }
+  else if (m.type === 'result') { $('result').textContent = m.text; log('m', `${hhmmss(m.t)}  · ${m.text.replace(/\n/g, ' | ')}`); }
+  else if (m.type === 'traffic') {
+    if (m.char === 'stream' && !$('showstream').checked) return;
+    const arrow = m.dir === 'tx' ? '→' : '←';
+    log(m.dir, `${hhmmss(m.t)} ${arrow} ${m.char.padEnd(6)} ${String(m.n).padStart(3)}B  ${m.hex.length > 96 ? m.hex.slice(0, 96) + '…' : m.hex}`);
+  }
+};
+es.onerror = () => { $('status').textContent = 'dashboard server not reachable'; $('dot').classList.remove('on'); };
+</script>
+</body>
+</html>

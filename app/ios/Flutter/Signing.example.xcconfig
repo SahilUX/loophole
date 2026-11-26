@@ -1,0 +1,2 @@
+// Copy to Signing.local.xcconfig (gitignored) and put in your own Apple team ID, so Xcode can sign the app.
+DEVELOPMENT_TEAM = YOURTEAMID

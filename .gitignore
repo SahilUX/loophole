@@ -1,0 +1,15 @@
+# Bluetooth logs and other captures contain personal health data
+captures/
+
+# Python
+scripts/.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# packaging
+*.egg-info/
+build/
+dist/

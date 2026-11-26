@@ -1,0 +1,6 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Themed icon: the system tints one shape, so the three segments are cut out of the ring. -->
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+        android:pathData="M24,54 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0 z M34.787,54 a19.213,19.213 0 1,0 38.427,0 a19.213,19.213 0 1,0 -38.427,0 z M56.808,27.35 A26.798,26.798 0 0,1 61.381,28.239 A2.191,2.191 0 0,1 60.174,32.451 A22.416,22.416 0 0,0 56.349,31.708 A2.191,2.191 0 0,1 56.808,27.35 z M70.504,32.888 A26.798,26.798 0 0,1 75.112,37.496 A2.191,2.191 0 0,1 71.66,40.195 A22.416,22.416 0 0,0 67.805,36.34 A2.191,2.191 0 0,1 70.504,32.888 z M79.761,46.619 A26.798,26.798 0 0,1 80.65,51.192 A2.191,2.191 0 0,1 76.292,51.651 A22.416,22.416 0 0,0 75.549,47.826 A2.191,2.191 0 0,1 79.761,46.619 z" />
+</vector>
